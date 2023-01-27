@@ -42,7 +42,7 @@ function getLinter(
 	const lintConfig: RubyCommandConfiguration =
 		typeof config.lint[name] === 'object' ? config.lint[name] : {};
 	const executionRoot =
-		lintConfig.executionRoot.toLowerCase() === 'workspace root'
+		lintConfig.executionRoot?.toLowerCase() === 'workspace root'
 			? URI.parse(config.workspaceFolderUri).fsPath
 			: path.dirname(URI.parse(document.uri).fsPath);
 	const linterConfig: LinterConfig = {

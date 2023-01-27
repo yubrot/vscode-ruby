@@ -39,7 +39,7 @@ function getFormatter(
 	// Only format if we have a formatter to use and an execution root
 	if (typeof config.format === 'string' && config.workspaceFolderUri) {
 		const executionRoot =
-			config.executionRoot.toLowerCase() === 'workspace root'
+			config.executionRoot?.toLowerCase() === 'workspace root'
 				? URI.parse(config.workspaceFolderUri).fsPath
 				: path.dirname(URI.parse(document.uri).fsPath);
 		const formatterConfig: FormatterConfig = {

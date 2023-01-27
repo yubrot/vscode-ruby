@@ -4,35 +4,41 @@ import path from 'path';
 
 const SHIM_DIR = path.resolve(__dirname, 'shims');
 
-function isWindows(): boolean {
-	return process.platform === 'win32';
+function platform(): 'windows' | 'darwin' | null {
+	switch (process.platform) {
+		case 'win32':
+			return 'windows';
+		case 'darwin':
+			return 'darwin';
+		default:
+			return null;
+	}
 }
 
 function defaultShell(): string {
-	if (isWindows()) {
-		return process.env.COMSPEC || 'cmd.exe';
+	switch (platform()) {
+		case 'windows':
+			return process.env.COMSPEC || 'cmd.exe';
+		case 'darwin':
+			return process.env.SHELL || '/bin/bash';
+		default:
+			return process.env.SHELL || '/bin/sh';
 	}
-
-	if (!process.env.SHELL) {
-		return process.platform === 'darwin' ? '/bin/bash' : '/bin/sh';
-	}
-
-	return process.env.SHELL;
 }
 
-function shimExtension(shell: string): string {
-	let extension = 'sh';
-	if (shell.indexOf('fish') >= 0) extension = 'fish';
-	else if (isWindows()) extension = 'cmd';
-	return extension;
+function shellExtension(shell: string): string {
+	if (shell == 'cmd.exe') return 'cmd';
+	if (shell.endsWith('fish')) return 'fish';
+	if (shell.endsWith('zsh')) return 'zsh';
+	return 'sh';
 }
 
-function getTemplate(shell: string): string {
-	let template;
-	if (isWindows()) {
-		template = 'SET';
-	} else if (shell.indexOf('fish') >= 0) {
-		template = `#!${shell}
+function shellShim(shell: string): string {
+	if (shell == 'cmd.exe') {
+		return 'SET';
+	}
+	if (shell.endsWith('fish')) {
+		return `#!${shell}
 for name in (set -nx)
 	if string match --quiet '*PATH' $name
 		echo $name=(string join : -- $$name)
@@ -40,45 +46,33 @@ for name in (set -nx)
 		echo $name="$$name"
 	end
 end`;
-	} else {
-		template = `#!${shell} -i\nexport`;
 	}
 
-	return template;
+	// Run direnv by `cd .`
+	return 'cd .\nexport';
 }
 
-function mkShim(shell: string, shimPath: string): boolean {
-	const template = getTemplate(shell);
-	let result = false;
-
-	try {
-		fs.writeFileSync(shimPath, template);
-		fs.chmodSync(shimPath, 0o744);
-		result = true;
-	} catch (e) {
-		console.error(e);
-	}
-
-	return result;
-}
-
-function getShellName(shell: string): string {
-	const cleanShell = isWindows() ? path.basename(shell) : shell;
-	return cleanShell.replace(/[\/\\]/g, '.');
-}
-
-function getShim(shell: string, shimDir: string): string {
-	let shellName: string = getShellName(shell);
-	if (shellName[0] === '.') shellName = shellName.slice(1);
-	const shimPath = path.join(shimDir, `env.${shellName}.${shimExtension(shellName)}`);
+function prepareShim(shell: string, shimDir: string): string {
+	const shimName = `${shell.replace(/[\/\\]/g, '.')}.${shellExtension(shell)}`;
+	const shimPath = path.join(shimDir, shimName);
 	if (!fs.existsSync(shimDir)) {
 		fs.mkdirSync(shimDir);
 	}
 	if (!fs.existsSync(shimPath)) {
-		mkShim(shell, shimPath);
+		try {
+			fs.writeFileSync(shimPath, shellShim(shell));
+			fs.chmodSync(shimPath, 0o744);
+		} catch (e) {
+			console.error(e);
+		}
 	}
 
 	return shimPath;
+}
+
+function buildCommandArgs(shell: string, shimPath: string): [string, string[]] {
+	if (shell == 'cmd.exe') return [shell, [shimPath]];
+	return ['env', ['-', shell, '-i', shimPath]];
 }
 
 // Based on the dotenv parse function:
@@ -184,15 +178,17 @@ export interface LoadEnvOptions {
 
 export function loadEnv(cwd: string, options = {} as LoadEnvOptions): IEnvironment {
 	const { shell = defaultShell(), shimDir = SHIM_DIR } = options;
-	const shim: string = getShim(shell, shimDir);
+	const shimPath = prepareShim(shell, shimDir);
+	const [command, args] = buildCommandArgs(shell, shimPath);
 
-	const { stdout, stderr, status } = spawn.sync(shim, [], {
-		cwd,
-	});
+	const { stdout, stderr, status } = spawn.sync(command, args, { cwd });
 
 	if (status !== 0) {
 		console.error(stderr.toString());
 	}
 
-	return processEnvironment(stdout.toString());
+	console.log(stdout.toString());
+	const out = processEnvironment(stdout.toString());
+	console.log(out);
+	return out;
 }
