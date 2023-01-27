@@ -5,9 +5,18 @@
 		"module": "commonjs",
 		"moduleResolution": "node",
 		"outDir": "dist",
-		"rootDir": "src"
+		"rootDir": "."
 	},
-	"include": ["src", "spec"],
-	"exclude": ["node_modules"],
-	"references": [{ "path": "../vscode-ruby-common" }]
+	"include": [
+		"src",
+		"spec"
+	],
+	"exclude": [
+		"node_modules"
+	],
+	"references": [
+		{
+			"path": "../vscode-ruby-common"
+		}
+	]
 }
